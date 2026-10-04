@@ -54,6 +54,8 @@ GLTFAnimation::Interpolation GLTFAnimation::godot_to_gltf_interpolation(const Re
 			return INTERP_STEP;
 		case Animation::INTERPOLATION_CUBIC:
 		case Animation::INTERPOLATION_CUBIC_ANGLE:
+		case Animation::INTERPOLATION_MAKIMA:
+		case Animation::INTERPOLATION_MAKIMA_ANGLE:
 			return INTERP_CUBIC_SPLINE;
 	}
 	return INTERP_LINEAR;
@@ -104,7 +106,7 @@ GLTFAnimation::GLTFAnimation() {
 }
 
 Variant GLTFAnimation::get_additional_data(const StringName &p_extension_name) {
-	return additional_data[p_extension_name];
+	return additional_data.get(p_extension_name, Variant());
 }
 
 void GLTFAnimation::set_additional_data(const StringName &p_extension_name, Variant p_additional_data) {

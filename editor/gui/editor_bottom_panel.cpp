@@ -139,6 +139,23 @@ bool EditorBottomPanel::can_switch_dock() const {
 	return !is_locked();
 }
 
+Rect2 EditorBottomPanel::get_floating_dock_rect(EditorDock *p_dock) {
+	if (p_dock->is_visible_in_tree()) {
+		return DockTabContainer::get_default_floating_dock_rect(p_dock);
+	}
+	// If dock is  not visible, its size may not be initialized.
+	Rect2 ret;
+	ret.size = get_size();
+
+	int *stored_size = dock_offsets.getptr(p_dock->get_effective_layout_key());
+	if (stored_size) {
+		ret.size.y = -(*stored_size);
+	}
+	ret.size.y -= get_tab_bar()->get_size().y;
+	ret.position = get_tab_bar()->get_screen_position() - Vector2(0, ret.size.y);
+	return ret;
+}
+
 void EditorBottomPanel::load_selected_tab(int p_idx) {
 	EditorDock *selected_dock = get_dock(p_idx);
 	if (!selected_dock) {
@@ -278,6 +295,8 @@ EditorBottomPanel::EditorBottomPanel() :
 	set_deselect_enabled(true);
 	set_theme_type_variation("BottomPanel");
 
+	add_margin_valid_drop(SIDE_BOTTOM, EditorDock::DOCK_SLOT_BOTTOM_L);
+
 	bottom_hbox = memnew(HBoxContainer);
 	bottom_hbox->set_mouse_filter(MOUSE_FILTER_IGNORE);
 	get_internal_container()->add_child(bottom_hbox);
@@ -286,6 +305,12 @@ EditorBottomPanel::EditorBottomPanel() :
 
 	editor_toaster = memnew(EditorToaster);
 	bottom_hbox->add_child(editor_toaster);
+
+	// NOTE: This is currently used only for ExportTemplateManager and hard-coded for that task.
+	progress_indicator = memnew(ProgressIndicator);
+	progress_indicator->set_v_size_flags(SIZE_SHRINK_CENTER);
+	progress_indicator->hide();
+	bottom_hbox->add_child(progress_indicator);
 
 	EditorVersionButton *version_btn = memnew(EditorVersionButton(EditorVersionButton::FORMAT_BASIC));
 	// Fade out the version label to be less prominent, but still readable.
@@ -320,4 +345,31 @@ EditorBottomPanel::~EditorBottomPanel() {
 	for (Button *b : legacy_buttons) {
 		memdelete(b);
 	}
+}
+
+void ProgressIndicator::_notification(int p_what) {
+	if (p_what == NOTIFICATION_THEME_CHANGED) {
+		const Ref<Texture2D> ring_texture = get_editor_theme_icon(SNAME("ProgressRing"));
+		set_progress_texture(ring_texture);
+		set_tint_progress(get_theme_color(SNAME("accent_color"), EditorStringName(Editor)));
+		set_under_texture(ring_texture);
+	}
+}
+
+void ProgressIndicator::_bind_methods() {
+	ADD_SIGNAL(MethodInfo("clicked"));
+}
+
+void ProgressIndicator::gui_input(const Ref<InputEvent> &p_event) {
+	Ref<InputEventMouseButton> mb = p_event;
+	if (mb.is_valid() && mb->is_pressed() && mb->get_button_index() == MouseButton::LEFT) {
+		emit_signal("clicked");
+	}
+}
+
+ProgressIndicator::ProgressIndicator() {
+	set_fill_mode(FILL_CLOCKWISE);
+	set_tint_under(Color());
+	set_step(0.0);
+	set_max(1.0);
 }

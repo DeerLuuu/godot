@@ -345,7 +345,7 @@ Variant Resource::_duplicate_recursive(const Variant &p_variant, const Duplicate
 			const Dictionary &src = p_variant;
 			Dictionary dst;
 			if (src.is_typed()) {
-				dst.set_typed(src.get_typed_key_builtin(), src.get_typed_key_class_name(), src.get_typed_key_script(), src.get_typed_value_builtin(), src.get_typed_value_class_name(), src.get_typed_value_script());
+				dst.set_typed(src.get_key_type(), src.get_value_type());
 			}
 			for (const Variant &k : src.get_key_list()) {
 				const Variant &v = src[k];
@@ -757,6 +757,9 @@ void Resource::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("duplicate", "deep"), &Resource::duplicate, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("duplicate_deep", "deep_subresources_mode"), &Resource::_duplicate_deep_bind, DEFVAL(RESOURCE_DEEP_DUPLICATE_INTERNAL));
+
+	// TODO: Once we can break compatibility, change the binding to "copy_from". For now, we have to avoid clashing with the method from `Image`.
+	ClassDB::bind_method(D_METHOD("copy_from_resource", "resource"), &Resource::copy_from);
 
 	// For the bindings, it's much more natural to expose this enum from the Variant realm via Resource.
 	// Therefore, we can't use BIND_ENUM_CONSTANT here because we need some customization.

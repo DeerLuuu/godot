@@ -56,7 +56,7 @@ struct VariantCaster {
 		if constexpr (std::is_base_of_v<Object, TStripped>) {
 			return Object::cast_to<TStripped>(p_variant);
 		} else {
-			return p_variant;
+			return p_variant.to<T>();
 		}
 	}
 };
@@ -68,7 +68,7 @@ struct VariantCaster<T &> {
 		if constexpr (std::is_base_of_v<Object, TStripped>) {
 			return Object::cast_to<TStripped>(p_variant);
 		} else {
-			return p_variant;
+			return p_variant.to<T>();
 		}
 	}
 };
@@ -80,13 +80,13 @@ struct VariantCaster<const T &> {
 		if constexpr (std::is_base_of_v<Object, TStripped>) {
 			return Object::cast_to<TStripped>(p_variant);
 		} else {
-			return p_variant;
+			return p_variant.to<T>();
 		}
 	}
 };
 
 // Object enum casts must go here
-VARIANT_ENUM_CAST(Object::ConnectFlags);
+VARIANT_BITFIELD_CAST(Object::ConnectFlags);
 
 VARIANT_ENUM_CAST(Vector2::Axis);
 VARIANT_ENUM_CAST(Vector2i::Axis);

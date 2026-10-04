@@ -46,6 +46,7 @@ public:
 		SCROLL_MODE_SHOW_ALWAYS,
 		SCROLL_MODE_SHOW_NEVER,
 		SCROLL_MODE_RESERVE,
+		SCROLL_MODE_MAXIMIZE_FIRST,
 	};
 
 	enum ScrollHintMode {
@@ -53,6 +54,12 @@ public:
 		SCROLL_HINT_MODE_ALL,
 		SCROLL_HINT_MODE_TOP_AND_LEFT,
 		SCROLL_HINT_MODE_BOTTOM_AND_RIGHT,
+		SCROLL_HINT_MODE_TOP_AND_BOTTOM,
+		SCROLL_HINT_MODE_LEFT_AND_RIGHT,
+		SCROLL_HINT_MODE_TOP,
+		SCROLL_HINT_MODE_BOTTOM,
+		SCROLL_HINT_MODE_LEFT,
+		SCROLL_HINT_MODE_RIGHT,
 	};
 
 private:
@@ -86,9 +93,13 @@ private:
 	bool follow_focus = false;
 	int scroll_border = 20;
 	int scroll_speed = 12;
+	bool scroll_horizontal_by_default = false;
 
 	ScrollHintMode scroll_hint_mode = SCROLL_HINT_MODE_DISABLED;
 	bool tile_scroll_hint = false;
+
+	bool following = false;
+	Vector2 scroll_diff;
 
 	struct ThemeCache {
 		Ref<StyleBox> panel_style;
@@ -100,6 +111,10 @@ private:
 		Color scroll_hint_vertical_color;
 		Color scroll_hint_horizontal_color;
 
+		int scrollbar_margin_left = -1;
+		int scrollbar_margin_top = -1;
+		int scrollbar_margin_right = -1;
+		int scrollbar_margin_bottom = -1;
 		int scrollbar_h_separation = 0;
 		int scrollbar_v_separation = 0;
 	} theme_cache;
@@ -115,8 +130,14 @@ private:
 	bool focus_border_is_drawn = false;
 	bool child_has_focus();
 
+	Size2 _get_minimum_size(bool p_use_desired_sizes) const;
+
+	Rect2 _get_local_visible_rect() const;
+
 protected:
 	Size2 get_minimum_size() const override;
+	Size2 get_desired_size() const override;
+	Size2 get_inner_combined_maximum_size() const override;
 
 	void _gui_focus_changed(Control *p_control);
 	void _reposition_children();
@@ -154,6 +175,9 @@ public:
 
 	void set_vertical_scroll_mode(ScrollMode p_mode);
 	ScrollMode get_vertical_scroll_mode() const;
+
+	void set_scroll_horizontal_by_default(bool p_enable);
+	bool is_scroll_horizontal_by_default() const;
 
 	void set_deadzone(int p_deadzone);
 	int get_deadzone() const;
