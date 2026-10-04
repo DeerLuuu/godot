@@ -1,8 +1,8 @@
-short_name = "godot"
-name = "Godot Engine"
-major = 4
-minor = 8
-patch = 0
+short_name = "deer"
+name = "deer Engine"
+major = 1
+minor = 0
+patch = 1
 status = "dev"
 module_config = ""
 website = "https://godotengine.org"
