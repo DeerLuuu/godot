@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="GDScriptTrait" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		A reusable bundle of members that classes can include with the [code]uses[/code] keyword.
+	</brief_description>
+	<description>
+		A trait is declared with the [code]trait[/code] keyword and holds any member a class can hold, except inner classes. Classes bring a trait's members into themselves with [code]uses[/code].
+		[codeblock]
+		class_name Player
+		extends Node
+		uses Damageable, Movable
+
+		func take_damage(amount: int) -> void:
+			# Overrides the trait's implementation.
+			health -= amount
+			if health <= 0:
+				died.emit()
+
+		func _physics_process(delta: float) -> void:
+			move(Vector2.RIGHT)
+		[/codeblock]
+		A trait is not a base type: it cannot be instantiated, and it cannot be inherited from with [code]extends[/code]. Its members are copied into every class that uses it, which is what makes a trait's state per-instance rather than shared.
+		[b]Note:[/b] Traits can only be declared and used within the same script file. Referencing a trait from another file is not supported yet.
+	</description>
+	<tutorials>
+		<link title="GDScript reference">$DOCS_URL/tutorials/scripting/gdscript/gdscript_basics.html</link>
+	</tutorials>
+</class>

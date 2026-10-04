@@ -552,6 +552,8 @@ Error GDScriptAnalyzer::resolve_class_inheritance(GDScriptParser::ClassNode *p_c
 						switch (member.type) {
 							case GDScriptParser::ClassNode::Member::CLASS:
 								break; // OK.
+							case GDScriptParser::ClassNode::Member::TRAIT:
+								break; // OK.
 							case GDScriptParser::ClassNode::Member::CONSTANT:
 								if (member_datatype.kind != GDScriptParser::DataType::SCRIPT && member_datatype.kind != GDScriptParser::DataType::CLASS) {
 									push_error(vformat(R"(Constant "%s" is not a preloaded script or class.)", name), id);
@@ -623,6 +625,12 @@ Error GDScriptAnalyzer::resolve_class_inheritance(GDScriptParser::ClassNode *p_c
 		return ERR_PARSE_ERROR;
 	}
 
+	// A trait is a bundle of members, not a base type, so it cannot be inherited from.
+	if (result.kind == GDScriptParser::DataType::TRAIT) {
+		push_error(vformat(R"(Could not inherit from trait "%s".)", result.class_type != nullptr && result.class_type->identifier != nullptr ? result.class_type->identifier->name : "<unknown>"), p_class);
+		return ERR_PARSE_ERROR;
+	}
+
 	// Check for cyclic inheritance.
 	const GDScriptParser::ClassNode *base_class = result.class_type;
 	while (base_class) {
@@ -636,6 +644,12 @@ Error GDScriptAnalyzer::resolve_class_inheritance(GDScriptParser::ClassNode *p_c
 	p_class->base_type = result;
 	class_type.native_type = result.native_type;
 	p_class->self_type = class_type;
+
+	// A trait's own metatype is TRAIT, which is what makes `extends SomeTrait`
+	// detectable as an error above and lets `uses` find it.
+	if (p_class->type == GDScriptParser::Node::TRAIT) {
+		p_class->self_type.kind = GDScriptParser::DataType::TRAIT;
+	}
 
 	// Apply annotations.
 	for (GDScriptParser::AnnotationNode *&E : p_class->annotations) {
@@ -656,6 +670,111 @@ Error GDScriptAnalyzer::resolve_class_inheritance(GDScriptParser::ClassNode *p_c
 		for (const GDScriptParser::ClassNode::Member &member : p_class->members) {
 			if (member.type == GDScriptParser::ClassNode::Member::CLASS) {
 				const Error inner_err = resolve_class_inheritance(member.m_class, true);
+				if (inner_err != OK && err == OK) {
+					err = inner_err;
+				}
+			}
+		}
+	}
+
+	return err;
+}
+
+Error GDScriptAnalyzer::resolve_class_uses(GDScriptParser::ClassNode *p_class, const GDScriptParser::Node *p_source) {
+	if (p_source == nullptr && parser->has_class(p_class)) {
+		p_source = p_class;
+	}
+
+	if (p_class->resolved_uses) {
+		// Already resolved.
+		return OK;
+	}
+	p_class->resolved_uses = true;
+
+	if (p_class->traits.is_empty()) {
+		return OK;
+	}
+
+	GDScriptParser::ClassNode *previous_class = parser->current_class;
+	parser->current_class = p_class;
+
+	for (int i = 0; i < p_class->traits.size(); i++) {
+		GDScriptParser::UsesNode *uses = p_class->traits[i];
+		if (uses == nullptr || uses->fqtn.is_empty()) {
+			continue;
+		}
+
+		// Locate the referenced trait by its fully-qualified name.
+		// `uses A.B.C` uses dots; `find_class()` expects `::` separators.
+		GDScriptParser::ClassNode *found = parser->find_class(uses->fqtn.replace(".", "::"));
+		if (found == nullptr || found->type != GDScriptParser::Node::TRAIT) {
+			push_error(vformat(R"(Could not find trait "%s".)", uses->fqtn), uses);
+			continue;
+		}
+		GDScriptParser::TraitNode *trait = static_cast<GDScriptParser::TraitNode *>(found);
+
+		// A trait cannot use itself, directly or through another trait.
+		if (p_class->type == GDScriptParser::Node::TRAIT && trait->fqcn == p_class->fqcn) {
+			push_error(vformat(R"(Trait "%s" cannot use itself.)", uses->fqtn), uses);
+			continue;
+		}
+		if (p_class->traits_fqtn.has(trait->fqcn)) {
+			push_error(vformat(R"(Trait "%s" is already used.)", uses->fqtn), uses);
+			continue;
+		}
+		p_class->traits_fqtn.push_back(trait->fqcn);
+
+		// Resolve the trait itself first so its members have types.
+		GDScriptParser::ClassNode *previous_trait = parser->current_class;
+		parser->current_class = trait;
+		RETURN_IF_ERROR(resolve_class_interface(trait));
+		RETURN_IF_ERROR(resolve_class_body(trait));
+		parser->current_class = previous_trait;
+
+		// Copy the trait's members into this class, tagging each with its origin.
+		for (const GDScriptParser::ClassNode::Member &member : trait->members) {
+			if (member.type == GDScriptParser::ClassNode::Member::GROUP) {
+				continue;
+			}
+
+			const StringName member_name = member.get_name();
+			if (member_name.is_empty()) {
+				continue;
+			}
+
+			if (p_class->has_member(member_name)) {
+				const GDScriptParser::ClassNode::Member existing = p_class->get_member(member_name);
+				// Members declared in the trait itself always win over inherited ones.
+				if (existing.type == member.type && existing.get_source_node() != nullptr &&
+						existing.get_source_node()->trait_origin.is_empty()) {
+					continue;
+				}
+				push_error(vformat(R"(The member "%s" from trait "%s" conflicts with an existing member in "%s".)", member_name, uses->fqtn, p_class->fqcn), member.get_source_node());
+				continue;
+			}
+
+			GDScriptParser::ClassNode::Member copied = member;
+			GDScriptParser::Node *source = copied.get_source_node();
+			if (source != nullptr) {
+				source->trait_origin.push_back(trait->fqcn);
+			}
+			p_class->add_member(copied);
+		}
+	}
+
+	parser->current_class = previous_class;
+	return OK;
+}
+
+Error GDScriptAnalyzer::resolve_class_uses(GDScriptParser::ClassNode *p_class, bool p_recursive) {
+	RETURN_IF_ERROR(resolve_class_uses(p_class));
+
+	Error err = OK;
+	if (p_recursive) {
+		for (const GDScriptParser::ClassNode::Member &member : p_class->members) {
+			if (member.type == GDScriptParser::ClassNode::Member::CLASS ||
+					member.type == GDScriptParser::ClassNode::Member::TRAIT) {
+				const Error inner_err = resolve_class_uses(member.m_class, true);
 				if (inner_err != OK && err == OK) {
 					err = inner_err;
 				}
@@ -877,10 +996,14 @@ GDScriptParser::DataType GDScriptAnalyzer::resolve_datatype(GDScriptParser::Type
 
 					GDScriptParser::ClassNode::Member member = script_class->get_member(first);
 					switch (member.type) {
-						case GDScriptParser::ClassNode::Member::CLASS:
-							result = member.get_datatype();
-							found = true;
-							break;
+					case GDScriptParser::ClassNode::Member::CLASS:
+						result = member.get_datatype();
+						found = true;
+						break;
+					case GDScriptParser::ClassNode::Member::TRAIT:
+						result = member.get_datatype();
+						found = true;
+						break;
 						case GDScriptParser::ClassNode::Member::ENUM:
 							result = member.get_datatype();
 							found = true;
@@ -1265,6 +1388,11 @@ void GDScriptAnalyzer::resolve_class_member(GDScriptParser::ClassNode *p_class, 
 					resolve_class_inheritance(member.m_class, p_source);
 				}
 				break;
+			case GDScriptParser::ClassNode::Member::TRAIT:
+				// Traits are resolved through `resolve_class_uses()`, which copies
+				// their members into the consuming class.
+				resolve_class_interface(member.m_class, p_source);
+				break;
 			case GDScriptParser::ClassNode::Member::GROUP:
 				// No-op, but needed to silence warnings.
 				break;
@@ -1320,8 +1448,15 @@ void GDScriptAnalyzer::resolve_class_interface(GDScriptParser::ClassNode *p_clas
 			return;
 		}
 
+		// Bring in the members of any traits this class/trait uses.
+		// Done after inheritance so a trait can override inherited members.
+		if (resolve_class_uses(p_class) != OK) {
+			return;
+		}
+
 		GDScriptParser::DataType base_type = p_class->base_type;
-		if (base_type.kind == GDScriptParser::DataType::CLASS) {
+		if (base_type.kind == GDScriptParser::DataType::CLASS ||
+				base_type.kind == GDScriptParser::DataType::TRAIT) {
 			GDScriptParser::ClassNode *base_class = base_type.class_type;
 			resolve_class_interface(base_class, p_class);
 		}
@@ -3300,6 +3435,17 @@ void GDScriptAnalyzer::reduce_call(GDScriptParser::CallNode *p_call, bool p_is_a
 	GDScriptParser::Node::Type callee_type = p_call->get_callee_type();
 	GDScriptParser::DataType call_type;
 
+	// A trait has no runtime instance of its own; its members live on the classes
+	// that use it, so calling through a trait reference directly is not allowed.
+	if (callee_type == GDScriptParser::Node::IDENTIFIER) {
+		const GDScriptParser::IdentifierNode *callee = static_cast<const GDScriptParser::IdentifierNode *>(p_call->callee);
+		const GDScriptParser::DataType base_type = callee->datatype;
+		if (!p_call->is_self && base_type.is_constant && base_type.kind == GDScriptParser::DataType::TRAIT) {
+			push_error(R"(Cannot call a trait's functions directly; call through a class that uses it instead.)", p_call);
+			return;
+		}
+	}
+
 	if (!p_call->is_super && callee_type == GDScriptParser::Node::IDENTIFIER) {
 		// Call to name directly.
 		StringName function_name = p_call->function_name;
@@ -4306,11 +4452,17 @@ void GDScriptAnalyzer::reduce_identifier_from_base(GDScriptParser::IdentifierNod
 					}
 				} break;
 
-				case GDScriptParser::ClassNode::Member::CLASS: {
-					reduce_identifier_from_base_set_class(p_identifier, member.get_datatype());
-					p_identifier->source = GDScriptParser::IdentifierNode::MEMBER_CLASS;
-					return;
-				}
+			case GDScriptParser::ClassNode::Member::CLASS: {
+				reduce_identifier_from_base_set_class(p_identifier, member.get_datatype());
+				p_identifier->source = GDScriptParser::IdentifierNode::MEMBER_CLASS;
+				return;
+			}
+
+			case GDScriptParser::ClassNode::Member::TRAIT: {
+				reduce_identifier_from_base_set_class(p_identifier, member.get_datatype());
+				p_identifier->source = GDScriptParser::IdentifierNode::MEMBER_CLASS;
+				return;
+			}
 
 				default: {
 					// Do nothing
@@ -6507,6 +6659,22 @@ bool GDScriptAnalyzer::check_type_compatibility(const GDScriptParser::DataType &
 				src_script = base->base_type.script_type;
 			}
 			break;
+		case GDScriptParser::DataType::TRAIT:
+			// A trait is flattened into the class that uses it, so for type
+			// hierarchy purposes it resolves like that class.
+			if (p_source.is_meta_type) {
+				src_native = GDScript::get_class_static();
+			} else {
+				src_class = p_source.class_type;
+				const GDScriptParser::ClassNode *base = src_class;
+				while (base->base_type.kind == GDScriptParser::DataType::CLASS ||
+						base->base_type.kind == GDScriptParser::DataType::TRAIT) {
+					base = base->base_type.class_type;
+				}
+				src_native = base->base_type.native_type;
+				src_script = base->base_type.script_type;
+			}
+			break;
 		case GDScriptParser::DataType::VARIANT:
 		case GDScriptParser::DataType::BUILTIN:
 		case GDScriptParser::DataType::ENUM:
@@ -6534,6 +6702,18 @@ bool GDScriptAnalyzer::check_type_compatibility(const GDScriptParser::DataType &
 			}
 			return false;
 		case GDScriptParser::DataType::CLASS:
+			if (p_target.is_meta_type) {
+				return ClassDB::is_parent_class(src_native, GDScript::get_class_static());
+			}
+			while (src_class != nullptr) {
+				if (src_class == p_target.class_type || src_class->fqcn == p_target.class_type->fqcn) {
+					return true;
+				}
+				src_class = src_class->base_type.class_type;
+			}
+			return false;
+		case GDScriptParser::DataType::TRAIT:
+			// A trait resolves like the class that uses it.
 			if (p_target.is_meta_type) {
 				return ClassDB::is_parent_class(src_native, GDScript::get_class_static());
 			}
