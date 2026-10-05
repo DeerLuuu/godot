@@ -408,6 +408,8 @@ class GDScriptLanguage : public ScriptLanguage {
 	Vector<int> global_array_empty_indexes;
 
 #ifdef TOOLS_ENABLED
+public:
+	// A user-defined code snippet, as loaded from a JSON file in the project.
 	struct SnippetConfig {
 		String prefix;
 		String body;
@@ -419,6 +421,7 @@ class GDScriptLanguage : public ScriptLanguage {
 				prefix(p_prefix), body(p_body), description(p_description) {}
 	};
 
+private:
 	HashMap<String, SnippetConfig> snippets;
 	String snippets_dir_path;
 	uint64_t snippets_dir_timestamp = 0;
@@ -629,6 +632,7 @@ public:
 	virtual bool can_inherit_from_file() const override { return true; }
 	virtual String make_function(const String &p_class, const String &p_name, const PackedStringArray &p_args) const override;
 #ifdef TOOLS_ENABLED
+public:
 	void load_snippets();
 	const HashMap<String, SnippetConfig> &_get_snippets() const { return snippets; }
 	void _check_snippets_reload_from_language();
