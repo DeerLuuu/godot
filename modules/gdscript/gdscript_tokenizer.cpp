@@ -529,6 +529,7 @@ GDScriptTokenizer::Token GDScriptTokenizerText::annotation() {
 	KEYWORD("super", Token::SUPER) \
 	KEYWORD_GROUP('t') \
 	KEYWORD("trait", Token::TRAIT) \
+	KEYWORD_GROUP('u') \
 	KEYWORD("uses", Token::TK_USES) \
 	KEYWORD_GROUP('v') \
 	KEYWORD("var", Token::VAR) \

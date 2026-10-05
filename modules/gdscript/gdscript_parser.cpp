@@ -1058,6 +1058,7 @@ GDScriptParser::UsesNode *GDScriptParser::parse_uses() {
 		}
 		n_uses->fqtn += String(n_uses->name[i]->name);
 	}
+	complete_extents(n_uses);
 	return n_uses;
 }
 
