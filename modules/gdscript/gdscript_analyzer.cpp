@@ -698,8 +698,7 @@ Error GDScriptAnalyzer::resolve_class_uses(GDScriptParser::ClassNode *p_class, c
 	GDScriptParser::ClassNode *previous_class = parser->current_class;
 	parser->current_class = p_class;
 
-	for (int i = 0; i < p_class->traits.size(); i++) {
-		GDScriptParser::UsesNode *uses = p_class->traits[i];
+	for (const GDScriptParser::UsesNode *uses : p_class->traits) {
 		if (uses == nullptr || uses->fqtn.is_empty()) {
 			continue;
 		}
@@ -727,8 +726,8 @@ Error GDScriptAnalyzer::resolve_class_uses(GDScriptParser::ClassNode *p_class, c
 		// Resolve the trait itself first so its members have types.
 		GDScriptParser::ClassNode *previous_trait = parser->current_class;
 		parser->current_class = trait;
-		RETURN_IF_ERROR(resolve_class_interface(trait));
-		RETURN_IF_ERROR(resolve_class_body(trait));
+		resolve_class_interface(trait);
+		resolve_class_body(trait);
 		parser->current_class = previous_trait;
 
 		// Copy the trait's members into this class, tagging each with its origin.
@@ -3437,10 +3436,9 @@ void GDScriptAnalyzer::reduce_call(GDScriptParser::CallNode *p_call, bool p_is_a
 
 	// A trait has no runtime instance of its own; its members live on the classes
 	// that use it, so calling through a trait reference directly is not allowed.
-	if (callee_type == GDScriptParser::Node::IDENTIFIER) {
-		const GDScriptParser::IdentifierNode *callee = static_cast<const GDScriptParser::IdentifierNode *>(p_call->callee);
-		const GDScriptParser::DataType base_type = callee->datatype;
-		if (!p_call->is_self && base_type.is_constant && base_type.kind == GDScriptParser::DataType::TRAIT) {
+	if (callee_type == GDScriptParser::Node::IDENTIFIER && p_call->callee != nullptr) {
+		const GDScriptParser::DataType base_type = p_call->callee->type_constraint;
+		if (base_type.is_constant && base_type.kind == GDScriptParser::DataType::TRAIT) {
 			push_error(R"(Cannot call a trait's functions directly; call through a class that uses it instead.)", p_call);
 			return;
 		}

@@ -1052,13 +1052,12 @@ GDScriptParser::UsesNode *GDScriptParser::parse_uses() {
 	}
 
 	// Build the fully-qualified name from the parsed path.
-	for (int i = 0; i < n_uses->name.size(); i++) {
+	for (int i = 0; i < (int)n_uses->name.size(); i++) {
 		if (i > 0) {
 			n_uses->fqtn += ".";
 		}
 		n_uses->fqtn += String(n_uses->name[i]->name);
 	}
-
 	return n_uses;
 }
 
@@ -1162,7 +1161,7 @@ void GDScriptParser::parse_class_member(T *(GDScriptParser::*p_parse_function)(b
 	}
 
 #ifdef TOOLS_ENABLED
-	if constexpr (std::is_same_v<T, ClassNode>) {
+	if constexpr (std::is_same_v<T, ClassNode> || std::is_same_v<T, TraitNode>) {
 		if (has_comment(member->start_line, true)) {
 			// Inline doc comment.
 			member->doc_data = parse_class_doc_comment(member->start_line, true);
@@ -1219,7 +1218,7 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 				parse_class_member(&GDScriptParser::parse_function, AnnotationInfo::FUNCTION, "function", next_is_static);
 				break;
 			case GDScriptTokenizer::Token::CLASS:
-				if (current_class != nullptr && current_class->type == TRAIT) {
+				if (current_class != nullptr && current_class->type == Node::TRAIT) {
 					push_error(R"(Traits cannot contain inner classes.)");
 					advance();
 					// Still parse the declaration to recover from the error.
@@ -1230,7 +1229,7 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 				parse_class_member(&GDScriptParser::parse_class, AnnotationInfo::CLASS, "class");
 				break;
 			case GDScriptTokenizer::Token::TRAIT:
-				if (current_class != nullptr && current_class->type == TRAIT) {
+				if (current_class != nullptr && current_class->type == Node::TRAIT) {
 					push_error(R"(Traits cannot contain other traits.)");
 				}
 				parse_class_member(&GDScriptParser::parse_trait, AnnotationInfo::NONE, "trait");
@@ -4410,8 +4409,8 @@ GDScriptParser::ParseRule *GDScriptParser::get_rule(GDScriptTokenizer::Token::Ty
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // SIGNAL,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // STATIC,
 		{ &GDScriptParser::parse_call,						nullptr,                                        PREC_NONE }, // SUPER,
-		{ &GDScriptParser::parse_trait,                  	nullptr,                                        PREC_NONE }, // TRAIT,
-		{ &GDScriptParser::parse_uses,                   	nullptr,                                        PREC_NONE }, // TK_USES,
+		{ nullptr,                                          nullptr,                                        PREC_NONE }, // TRAIT,
+		{ nullptr,                                          nullptr,                                        PREC_NONE }, // TK_USES,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // VAR,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // TK_VOID,
 		{ &GDScriptParser::parse_yield,                     nullptr,                                        PREC_NONE }, // YIELD,
