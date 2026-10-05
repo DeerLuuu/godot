@@ -848,6 +848,11 @@ public:
 			member.m_class = p_trait_node;
 			members.push_back(member);
 		}
+		// Adds an already-built member, used when copying trait members into a class.
+		void add_member(const Member &p_member) {
+			members_indices[p_member.get_name()] = members.size();
+			members.push_back(p_member);
+		}
 		void add_member(const EnumNode::Value &p_enum_value) {
 			members_indices[p_enum_value.identifier->name] = members.size();
 			members.push_back(Member(p_enum_value));
