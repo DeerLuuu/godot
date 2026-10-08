@@ -1,0 +1,5 @@
+{
+	"prefix": "await_frame",
+	"body": "await get_tree().process_frame",
+	"description": "Wait for the next process frame"
+}
