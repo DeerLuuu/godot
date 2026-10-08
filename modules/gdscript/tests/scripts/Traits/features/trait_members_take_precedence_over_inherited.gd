@@ -23,3 +23,5 @@ func test():
 	assert(instance.describe() == "trait")
 	# The trait's variable is present as well.
 	assert(instance.value == 0)
+
+	instance.free()

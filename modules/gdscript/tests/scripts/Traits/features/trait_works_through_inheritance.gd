@@ -23,3 +23,5 @@ func test():
 
 	leaf.greeting = "hi"
 	assert(leaf.greet() == "hi")
+
+	leaf.free()

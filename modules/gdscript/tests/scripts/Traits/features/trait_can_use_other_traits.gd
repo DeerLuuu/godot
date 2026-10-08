@@ -22,3 +22,5 @@ func test():
 	assert(consumer.base_value == 1)
 	assert(consumer.derived_value == 2)
 	assert(consumer.base_method() == "base")
+
+	consumer.free()

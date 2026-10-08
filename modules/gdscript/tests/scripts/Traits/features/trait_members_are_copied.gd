@@ -31,3 +31,6 @@ func test():
 	# into Actor, not shared through it.
 	assert(second.health == 100)
 	assert(second.is_dead() == false)
+
+	first.free()
+	second.free()
