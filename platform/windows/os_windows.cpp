@@ -2228,10 +2228,15 @@ Error OS_Windows::shell_show_in_file_manager(String p_path, bool p_open_folder) 
 		open_folder = true;
 	}
 
+	// fix_path() has to run on the bare path. simplify_path() inside it treats
+	// quotes as ordinary path characters, so quoting first would leave them in
+	// the string and Explorer would be handed a path that includes them.
+	p_path = fix_path(p_path);
+	// The \\?\ prefix is for Win32 file APIs; Explorer's shell verb rejects it.
+	p_path = p_path.trim_prefix(R"(\\?\)");
 	if (!p_path.is_quoted()) {
 		p_path = p_path.quote();
 	}
-	p_path = fix_path(p_path);
 
 	INT_PTR ret = OK;
 	if (open_folder) {
