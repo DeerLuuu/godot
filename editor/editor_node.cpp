@@ -4832,11 +4832,17 @@ void EditorNode::_set_current_scene(int p_idx) {
 		return; // Pointless.
 	}
 
-	_update_previous_scene_path();
 	_set_current_scene_nocheck(p_idx);
 }
 
 void EditorNode::_set_current_scene_nocheck(int p_idx, bool p_ignore_state) {
+	if (p_idx != editor_data.get_edited_scene()) {
+		// Remember the scene being left, whichever path changes the current scene
+		// (switching tabs, opening a scene, closing a tab, ...), so that the
+		// "Previous Scene in History" shortcut can go back to it.
+		_update_previous_scene_path();
+	}
+
 	// Save the folding in case the scene gets reloaded.
 	const String scene_path = editor_data.get_scene_path(p_idx);
 	if (scene_path.is_empty() && editor_data.get_edited_scene_root(p_idx)) {
@@ -5588,7 +5594,10 @@ void EditorNode::_navigate_to_previous_scene() {
 	if (previous_scene_path.is_empty()) {
 		return;
 	}
-	load_scene(previous_scene_path, false, false, true);
+	// `open_scene()` switches to the tab when the scene is already open, whereas
+	// `load_scene()` returns early in that case. The scene we came from is
+	// normally still open, so this is what makes the shortcut navigate at all.
+	open_scene(previous_scene_path, false, false, true);
 }
 
 void EditorNode::_add_to_recent_scenes(const String &p_scene) {
